@@ -49,8 +49,55 @@ document.addEventListener("DOMContentLoaded", () => {
             const text = document.createElement("span");
             text.textContent = p;
 
+            // remove/unregister button
+            const removeBtn = document.createElement("button");
+            removeBtn.className = "participant-remove";
+            removeBtn.title = "Unregister participant";
+            removeBtn.innerHTML = "&times;"; // simple × icon
+
+            // attach click handler to unregister with confirmation
+            removeBtn.addEventListener("click", async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+
+              // ask for confirmation
+              const confirmed = window.confirm(
+                `Unregister ${p} from ${name}? This cannot be undone.`
+              );
+              if (!confirmed) return;
+
+              // optimistic UI: disable button while processing
+              removeBtn.disabled = true;
+
+              try {
+                const activityEncoded = encodeURIComponent(name);
+                const emailEncoded = encodeURIComponent(p);
+                const res = await fetch(
+                  `/activities/${activityEncoded}/unregister?email=${emailEncoded}`,
+                  {
+                    method: "POST",
+                  }
+                );
+
+                if (res.ok) {
+                  // refresh the activities UI so availability and lists update
+                  fetchActivities();
+                } else {
+                  const body = await res.json().catch(() => ({}));
+                  console.error("Failed to unregister:", body.detail || body);
+                  removeBtn.disabled = false;
+                  alert(body.detail || "Failed to unregister participant");
+                }
+              } catch (err) {
+                console.error("Error unregistering participant:", err);
+                removeBtn.disabled = false;
+                alert("Failed to unregister participant. Please try again.");
+              }
+            });
+
             li.appendChild(avatar);
             li.appendChild(text);
+            li.appendChild(removeBtn);
             participantsList.appendChild(li);
           });
 
@@ -109,6 +156,9 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+
+        // Refresh activities so the new participant appears without a page reload
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
